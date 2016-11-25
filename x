@@ -16,7 +16,7 @@ Usage() {
 
 bootstrapEnv() {
 	apt update || sudo apt update
-    apt install -y ssh vim curl ctags cscope make tmux sed awk silversearcher-ag
+    apt install -y ssh vim curl ctags cscope make tmux sed silversearcher-ag
 	curl https://raw.githubusercontent.com/Shougo/neobundle.vim/master/bin/install.sh | sh
 
 	link
@@ -29,7 +29,7 @@ link() {
 	bins=$(find bin/ -maxdepth 1 -xtype f)
 	for binary in $bins; do
 		binary=$(basename $binary)
-		ln -sf $(pwd)/bin/$binary ~/bin/$binary
+		ln -sf $(pwd)/bin/$binary /bin/$binary
 	done
 
 	configs=$(find env/ -maxdepth 1 -xtype f)
@@ -46,7 +46,7 @@ unlink() {
 	bins=$(find bin/ -maxdepth 1 -xtype f)
 	for binary in $bins; do
 		binary=$(basename $binary)
-		rm -f ~/bin/$binary
+		rm -f /bin/$binary
 	done
 
 	configs=$(find env/ -maxdepth 1 -xtype f)
