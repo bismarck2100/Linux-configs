@@ -1,0 +1,34 @@
+[user]
+	name = bismarckhsu
+	email = bismarck2100@gmail.com
+
+[core]
+	editor = vim
+	excludesfile = ~/.gitignore
+
+[alias]
+	st = status
+	ci = commit
+	co = checkout
+	br = branch
+	df = diff
+	pick = cherry-pick
+	fp = format-patch
+	mt = mergetool
+	la = log --graph --decorate --pretty=oneline --abbrev-commit --all
+	ll = log --graph --decorate --pretty=oneline --abbrev-commit
+	lf = log --stat --decorate --format=fuller --abbrev-commit
+
+[color]
+	ui = auto
+	diff = auto
+	status = auto
+	branch = auto
+	log = auto
+
+[push]
+	default = simple
+
+[merge]
+	tool = vimdiff
+
