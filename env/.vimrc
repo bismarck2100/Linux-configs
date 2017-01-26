@@ -58,11 +58,6 @@ nnoremap <leader>d :Gdiff<CR>
 nnoremap <leader>ev :vsp $MYVIMRC<CR>
 nnoremap <leader>sv :source $MYVIMRC<CR>:echo $MYVIMRC "has been reloaded>^.^<"<CR>
 
-nnoremap <F1> <Esc>
-nnoremap <F2> :call HideNumber()<CR>
-nnoremap <F3> :set list! list?<CR>
-nnoremap <F4> :set wrap! wrap?<CR>
-
 " move around tabs. conflict with the original screen top/bottom
 " " comment them out if you want the original H/L
 " " go to prev tab
@@ -121,6 +116,13 @@ set foldmethod=syntax
 set foldnestmax=1
 set t_ut= " fix tmux backgroud issue
 
+" ====================================================
+" VimDiff setting
+" ====================================================
+hi DiffAdd                     ctermbg=17
+hi DiffChange      ctermfg=181 ctermbg=239
+hi DiffDelete      ctermfg=162 ctermbg=53
+hi DiffText                    ctermbg=235 cterm=bold
 
 " ====================================================
 " Encoding setting
@@ -210,14 +212,3 @@ let g:EasyMotion_smartcase = 1
 " Function
 " ====================================================
 
-"" for f2
-function! HideNumber()
-  if(&relativenumber == &number)
-    set relativenumber! number!
-  elseif(&number)
-    set number!
-  else
-    set relativenumber!
-  endif
-  set number?
-endfunc
