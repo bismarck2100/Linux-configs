@@ -1,0 +1,4 @@
+# Ignore cscope related file
+cscope.*
+*.swp
+tags

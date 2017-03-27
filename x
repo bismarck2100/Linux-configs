@@ -16,10 +16,15 @@ Usage() {
 
 bootstrapEnv() {
 	apt update || sudo apt update
-    apt install -y ssh vim curl ctags cscope make tmux sed silversearcher-ag
+    apt install -y ssh vim curl ctags cscope make tmux sed silversearcher-ag cifs-utils
+
 	curl https://raw.githubusercontent.com/Shougo/neobundle.vim/master/bin/install.sh | sh
 
 	link
+
+	sed -i 's/PermitRootLogin.*$/PermitRootLogin yes/' /etc/ssh/sshd_config
+	/etc/init.d/ssh start
+	echo "Set your root password with passwd!"
 }
 
 link() {

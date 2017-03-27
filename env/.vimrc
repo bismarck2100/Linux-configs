@@ -20,7 +20,6 @@ NeoBundle 'tpope/vim-fugitive'
 NeoBundle 'ctrlpvim/ctrlp.vim'
 NeoBundle 'flazz/vim-colorschemes'
 NeoBundle 'terryma/vim-multiple-cursors'
-"NeoBundle 'mileszs/ack.vim'
 NeoBundle 'scrooloose/nerdtree'
 NeoBundle 'scrooloose/nerdcommenter'
 NeoBundle 'bronson/vim-trailing-whitespace'
@@ -41,7 +40,6 @@ NeoBundleCheck
 
 colorscheme molokai
 "colorscheme hybrid
-
 
 " ====================================================
 " Useful shortcut
@@ -197,16 +195,6 @@ map <Leader>h <Plug>(easymotion-linebackward)
 map  / <Plug>(easymotion-sn)
 omap  / <Plug>(easymotion-tn)
 let g:EasyMotion_smartcase = 1
-
-
-" --- Ack.vim
-" Dont jump to first result automatically
-" cnoreabbrev Ack Ack!
-"
-" nnoremap <Leader>a :Ack<Space>
-" if executable('ag')
-" 	let g:ackprg = 'ag --nocolor --nogroup --hidden --ignore tags --ignore cscope.out'
-" endif
 
 " ====================================================
 " Function
