@@ -1,0 +1,28 @@
+#!/bin/bash
+# @author: bismarckh
+
+src=/synosrc/Env64/source
+
+function DoPullSourceCode()
+{
+	local Project=$1
+	local DST_DIR=$src"/"$1
+
+	cd $DST_DIR
+
+	printf "==============================\n"
+	printf "Do pull src code: [%s]\n" $1
+
+	#git stash
+	git pull --rebase
+	#git stash pop
+
+	cd - > /dev/null
+
+	printf "\n\n"
+}
+
+DoPullSourceCode "libssmodule"
+DoPullSourceCode "live555-20141020"
+DoPullSourceCode "SurvDevicePack"
+DoPullSourceCode "Surveillance"

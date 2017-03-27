@@ -1,0 +1,102 @@
+#!/bin/bash
+# @author: kaiwang
+
+# Exported environment variable:
+	#WORKDIR=/synosrc/Env64/build_env/ds.alpine-6.0
+	src=/synosrc/Env64/source
+	ss=/synosrc/Env64/source/Surveillance
+	bss=$WORKDIR/source/Surveillance
+	bs=$WORKDIR/source
+
+# set -o xtrace
+
+HDLK_TMP_DIR="/tmp/ss-hdlk-rep"
+BUILD_SCRIPT="/home/root/script/srcbuild.sh"
+
+function CopyBuildScript()
+{
+	if [ -f $BUILD_SCRIPT ]; then
+		cp $BUILD_SCRIPT $WORKDIR/bin/
+	fi
+}
+
+function DoSrcLink()
+{
+	local PROJECT=$1
+	local DST_BASE_DIR=$2
+	local DST_DIR=$3
+	local SRC_DIR=$4
+
+	local LOG_FILE=${HDLK_TMP_DIR}"/log_"${PROJECT}
+	local SRC_FILES=${HDLK_TMP_DIR}"/src-files-"${PROJECT}
+	local MODIFIED_FILES=${HDLK_TMP_DIR}"/modified-files-"${PROJECT}
+	local EXTRA_FILES=${HDLK_TMP_DIR}"/extra-files-"${PROJECT}
+	local TRACKED_FILES=${HDLK_TMP_DIR}"/tracked-files-"${PROJECT}
+	local EXTRA_TRACKED_FILES=${HDLK_TMP_DIR}"/extra-tracked-files-"${PROJECT}
+
+	printf "==============================\n"
+	printf "\n"
+	printf "[%s]\n" $PROJECT
+	printf "  => Log to: %s\n" $LOG_FILE
+	printf "\n"
+
+	cd $DST_DIR
+
+	# Logging
+	diff -qr $DST_DIR $SRC_DIR | diffstat -p0  | grep -v $WORKDIR > $LOG_FILE
+	cat $LOG_FILE | grep -v " files changed"
+
+	# Deleted extra git-tracked files
+	diff -qr $DST_DIR $SRC_DIR | diffstat -lp0 | grep $WORKDIR > $EXTRA_FILES
+	git ls-files -cdmk | sed "s#^#$DST_DIR/#" > $TRACKED_FILES
+	comm <(sort $EXTRA_FILES) <(sort $TRACKED_FILES) -12 > $EXTRA_TRACKED_FILES
+	cat $EXTRA_TRACKED_FILES | xargs -d"\n" rm -rf
+
+	# Renew changed files (modified or added files)
+	diff -qr $DST_DIR $SRC_DIR | diffstat -lp0 | grep -v $WORKDIR > $SRC_FILES
+	sed "s#$SRC_DIR#$DST_DIR#g" $SRC_FILES > $MODIFIED_FILES
+	cat $MODIFIED_FILES | xargs -d"\n" rm -rf
+	cp -alf $SRC_DIR $DST_BASE_DIR
+
+	cd - > /dev/null
+
+	printf "\n"
+}
+
+# Check root
+if [ root != $USER ]; then
+	echo "[error] Must be run as root!!"
+	exit 1
+fi
+
+# Confirm
+echo "WORKDIR: \"$WORKDIR\""
+read -p "Continue? [Y/n] " -n1 ans
+if [ 'n' == "$ans" ] || [ 'N' == "$ans" ]; then
+	exit 0
+fi
+printf "\n"
+
+# SrcLink
+rm -rf $HDLK_TMP_DIR
+mkdir -p $HDLK_TMP_DIR
+
+# DoSrcLink "webapi-DSM5"	   $bs	$bs/webapi-DSM5			$s/webapi-DSM5
+# DoSrcLink "live555"		   $bs	$bs/live555_20090728	$s/live555_20090728
+# DoSrcLink "live555"		   $bs	$bs/live555-20141020	$s/live555-20141020
+# DoSrcLink "sqlite-3.8.x"	   $bs	$bs/sqlite-3.8.x			$s/sqlite-3.8.x
+DoSrcLink "libvscomm"	   $bs	$bs/libvscomm			$src/libvscomm
+DoSrcLink "libssmodule"	   $bs	$bs/libssmodule			$src/libssmodule
+# DoSrcLink "opencv"		   $bs	$bs/opencv				$s/opencv
+# DoSrcLink "x264"		   $bs	$bs/x264				$s/x264
+# DoSrcLink "libvsutils"	   $bs	$bs/libvsutils			$s/libvsutils
+# DoSrcLink "libsynoudpd"	   $bs	$bs/libsynoudpd			$s/libsynoudpd
+DoSrcLink "SurvDevicePack" $bs	$bs/SurvDevicePack		$src/SurvDevicePack
+DoSrcLink "Surveillance"   $bs	$bss					$ss
+# DoSrcLink "Surveillance"   $bs	$bs/"live555-20141020"	$s/"live555-20141020"
+
+# not work
+# DoSrcLink "uihelp"		   $bs	$bs/uihelp/SurveillanceStation		$s/uihelp/SurveillanceStation
+# rm -rf $bs/uihelp/SurveillanceStation/
+# cp -alf $s/uihelp/SurveillanceStation/ $bs/uihelp/SurveillanceStation/
+

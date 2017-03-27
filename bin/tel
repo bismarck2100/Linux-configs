@@ -1,0 +1,781 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+# hanenlin@synology.com
+import xml.etree.ElementTree as ET
+from collections import Counter
+import argparse
+import os.path
+from datetime import datetime
+import glob
+from argparse import RawTextHelpFormatter
+
+RED = "\033[1;31m"
+GRN = "\033[1;32m"
+YEL = "\033[1;33m"
+BLU = "\033[94m"
+GRY = "\033[1;30m"
+WHT = "\033[1;37m"
+CYN = "\033[1;36m"
+CLR = "\033[;m"
+
+tree = None
+department_dict = None
+title_dict = None
+output_queue_account = list()
+output_queue_team = list()
+output_queue_ext = list()
+local_database = os.getenv("HOME")+'/.snoopy_2015.xml'
+def get_today():
+    now = datetime.now()
+    today = str(now.year)+"-%02d" %(now.month)+"-%02d" %(now.day)
+    return today
+
+def load_xml_tree():
+    global tree
+    tree = ET.parse(local_database)
+
+def load_team_mapping():
+    global department_dict
+    xml_root = tree.getroot()
+    xml_department = xml_root.find('department_mapping')
+    if department_dict == None:
+        department_dict = dict()
+        for alias in xml_department:
+            f = alias.find('full_name').text
+            s = alias.find('simple_name').text
+            department_dict[f] = s
+
+def load_title_mapping():
+    global title_dict
+    xml_root = tree.getroot()
+    xml_title = xml_root.find('title_mapping')
+    if title_dict == None:
+        title_dict = dict()
+        for alias in xml_title:
+            en = alias.find('title_en').text
+            tw = alias.find('title_tw').text
+            title_dict[en] = tw
+
+def color(c, string):
+    return '' + c + string + CLR
+
+def format_empid(member, padding = 0):
+    result = member.attrib['employee_id']
+    return result, len(result)
+
+def format_padding(string, pad):
+    for i in range(0, pad):
+        string += ' '
+    return string
+
+def format_team(member, padding = 0):
+    result = ""
+    my_division = member.find('department/division')
+    my_team     = member.find('department/team')
+    if my_team != None:
+        try:
+            result = department_dict[my_team.text]
+        except:
+            if my_team.text != None:
+                result = my_division.text + '-' + my_team.text
+            else:
+                result = my_division.text
+    else:
+        result = my_division.text
+
+    result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_title(member, padding = 0):
+    result = ""
+    title = member.find('title').text
+    if 'Senior' in title:
+       title = title.replace('Senior ','')
+       result += 'Sr. '
+
+    result += title
+    result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_name_en(member, padding = 0):
+    result = ""
+    name_en = member.find('nameEn').text
+    name_en_list = name_en.split(' ')
+    first_name_en = name_en.replace(name_en_list[-1],'').strip(' ')
+    result = '('+first_name_en+')'
+    result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_name_tw(member, padding = 0):
+    result = ""
+    name_tw = member.find('nameTw').text
+    result = name_tw
+    #padding
+    if len(result) == 2:
+        result += '  '
+    return result, len(result)
+
+def format_ext(member, padding = 0):
+    result = member.find('ext').text
+    if result == None:
+        result = '   '
+    else:
+        result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_account(member, padding = 0):
+    result = member.find('account').text
+    result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_leave_status(member, padding = 0):
+    status = member.find('leave_status').text
+    result = ""
+    if status != None:
+        result = status
+    return result, len(result)
+
+def format_print_queue(queue, len_list, fun_list, clist, cnt = 1):
+    output_string = ''
+    for i,member in enumerate(queue):
+        o_account = ''
+        # concat every information by function retrun
+        for index, f in enumerate(fun_list):
+            string = f(member, len_list[index])[0]
+            if member.attrib['employed'] == '0' :
+                string = color(GRY, string)
+            else:
+                string = color(clist[index], string)
+            o_account += string + ' '
+
+        # decide nextline or not
+        if ((i+1) % cnt) == 0:
+            output_string += o_account +'\n'
+        else:
+            output_string += o_account
+    
+    if len(output_string) == 0:
+        return
+
+    if output_string[-1] != '\n':
+        output_string +='\n'
+
+    print output_string.encode("utf-8"),
+
+def calculcate_padding_list(len_list, fun_list, queue):
+    for member in queue:
+        for index, f in enumerate(fun_list):
+            tmp_len = f(member)[1]
+            len_list[index] = (tmp_len if tmp_len > len_list[index] else len_list[index])
+
+def flush_output_queue():
+    def separation_print(string):
+        string = '============[ '+string.center(11) +' ]============'
+        string = color(WHT, string)
+        print string
+
+    len_list = [0, 0, 0, 0, 0, 0, 0, 0]
+    fun_list = [format_empid, format_team,format_title,format_name_tw,
+            format_name_en,format_ext,format_account, format_leave_status]
+    color_list = [GRY,YEL,CLR,GRN,CLR,RED,BLU,GRN]
+
+    calculcate_padding_list(len_list, fun_list, output_queue_account + output_queue_team)
+
+    need_separation = 1 if (output_queue_account and output_queue_team) else 0
+
+    if need_separation:
+        separation_print('account')
+    format_print_queue(output_queue_account, len_list, fun_list, color_list)
+
+    if need_separation:
+        separation_print('team')
+    format_print_queue(output_queue_team, len_list, fun_list, color_list)
+
+    if output_queue_team:
+        print 'total : ', len(output_queue_team)
+
+    if output_queue_ext:
+        format_print_queue(output_queue_ext, len_list, fun_list, color_list)
+
+def department_spanning(division, team):
+    spanning_list = list()
+    division = division.upper()
+    spanning_list.append(division)
+    if team != None:
+        spanning_list.append(team)
+        spanning_list.append(division+team)
+        spanning_list.append(division+'-'+team)
+    return spanning_list
+
+def query_ext_info(target, all_info):
+
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    for xml_member in xml_employee:
+        # check the employee still be hired
+        if xml_member.attrib['employed'] == '0':
+            if all_info != True:
+                continue
+        # the sub-element must in xml tree, find function shouldn't return None
+        my_account    = xml_member.find('account').text
+        my_division   = xml_member.find('department/division').text
+        my_team       = xml_member.find('department/team').text
+        my_ext        = xml_member.find('ext').text
+        my_name_en    = xml_member.find('nameEn').text.lower()
+        my_name_tw    = xml_member.find('nameTw').text
+
+        try:
+            xpath = "department_mapping/alias[simple_name='" + target.upper() + "']/full_name"
+            my_team_full = xml_root.find(xpath).text
+        except:
+            my_team_full = None
+
+        # barrier
+        if my_account == None or my_division == None:
+            continue
+        
+        #TODO : account spanning
+        if target in my_account or target in my_name_en:
+            output_queue_account.append(xml_member)
+
+        # query for Chinese name
+        if target in my_name_tw:
+            output_queue_account.append(xml_member)
+
+        # query for QC, QC-1, QC1, qc1
+        for compare_item in department_spanning(my_division, my_team):
+            if target.upper() in compare_item:
+                output_queue_team.append(xml_member)
+                break
+
+        # query for CPT/cpt
+        if my_team_full != None and my_team == my_team_full:
+            output_queue_team.append(xml_member)
+
+        # for query #800
+        if my_ext == target:
+            output_queue_ext.append(xml_member)
+
+def finger_team_print(member):
+    division = member.find('department/division').text
+    team = member.find('department/team').text
+    
+    if team == None:
+        full_name = division
+    else:
+        full_name = division + '-' + team
+    if 'SD' in division:
+        return color(CYN, format_team(member)[0]) + ' ('+full_name+')'
+    else:
+        return format_team(member)[0]
+
+def finger_print(target):
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    finger_queue = list()
+    for member in xml_employee:
+        my_account = member.find('account').text
+        if target in my_account:
+            finger_queue.append(member)
+
+    if len(finger_queue) == 0:
+        return
+
+    if len(finger_queue) > 1:
+        for idx, m in enumerate(finger_queue):
+            print color(WHT, str(idx)), m.find('account').text,m.find('nameTw').text,
+            print "(%s)" %(format_team(m)[0])
+
+        idx = raw_input('Please select specific member : ')
+        member = finger_queue[int(idx)]
+    else:
+        member = finger_queue[0]
+
+    print 'employee id:', member.attrib['employee_id']
+    print 'employed   :', (color(GRN, 'True') if member.attrib['employed'] == '1' else color(RED, 'False'))
+    print 'name       :', member.find('nameTw').text, '('+member.find('nameEn').text+')'
+    print 'gender     :', ('Male' if member.find('gender').text == '1' else 'Female')
+    print 'title      :', title_dict[member.find('title').text], '('+ member.find('title').text +')'
+    print 'department :', finger_team_print(member)
+    print 'ext        :', '#' + member.find('ext').text 
+    print 'account    :', member.find('account').text
+    print 'profile    :', member.find('profile').text
+    #FIXME
+    if member.find('location') is not None:
+        print 'location   :', member.find('location').text
+    print 'information:'
+    for info in member.findall('information/info_entry'):
+        date = color(BLU, info.attrib['date'])
+        if 'modify' in info.attrib['modify_type']:
+            mtype = color(YEL, info.attrib['modify_type'])
+        elif 'remove' in info.attrib['modify_type']:
+            mtype = color(RED, info.attrib['modify_type'])
+        else:
+            mtype = color(GRN, info.attrib['modify_type'])
+
+        if 'modify' not in info.attrib['modify_type']:
+            print date, mtype
+        else:
+            print date, mtype,':',info.text.replace(',',' => ').replace('-None','')
+
+def show_all_location():
+    xml_root = tree.getroot()
+    xml_location = xml_root.find('all_location')
+    for loc in xml_location:
+        analyze_location(loc.text)
+
+def show_location_analysis():
+    def getkey(member):
+        return (hash(member.text) * -1)
+
+    xml_root = tree.getroot()
+    xml_location = xml_root.find('all_location')
+    xml_location = sorted(xml_location, key=getkey)
+    for idx,loc in enumerate(xml_location):
+        print color(WHT,str(idx)), loc.text
+
+    idx = raw_input("Please select location : ")
+    analyze_location(xml_location[int(idx)].text)
+
+def analyze_location(target):
+    def location_analyze_print(name, num):
+        print '%-8s : %d (%.1f %%)' %(name, num, (num*1.0/total)*100)
+    team_queue = list()
+    gender_queue = list()
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    loc_member_list = xml_employee.findall(".//member[location='"+target+"']")
+    total = len(loc_member_list)
+
+    for member in loc_member_list:
+        team_queue.append(format_team(member)[0])
+        gender = '男生' if member.find('gender').text == '1' else '女生'
+        gender_queue.append(gender)
+
+    print color(GRN, target)
+    print "總人數 :", color(YEL, str(total))
+    #print gender information
+    for name,num in Counter(gender_queue).items():
+        location_analyze_print(name, num)
+
+    print ''
+    #print team information
+    for name,num in Counter(team_queue).items():
+        location_analyze_print(name, num)
+
+def show_team_analysis(queue_on_job, queue_off_job, queue_gender):
+    def separation_print(string, c):
+        print '[',color(c, string),']'
+    def team_full_name_print(member):
+        if member.find('department/team').text != None:
+            full_name = member.find('department/division').text + '-' + member.find('department/team').text
+        else:
+            full_name = member.find('department/division').text
+        print color(CYN, full_name)
+    len_list = [0, 0]
+    fun_list = [format_name_tw,format_name_en]
+    color_list = [CLR,CLR]
+    female_num = len(queue_gender)
+    if queue_on_job:
+        team_name = format_team(queue_on_job[0])[0]
+        separation_print(team_name, RED)
+        team_full_name_print(queue_on_job[0])
+        onj = len(queue_on_job)
+        offj = len(queue_off_job)
+        total = onj + offj
+        print '在職人數 :', onj
+        print '離職人數 :', offj
+        print '離職比例 : %.2f%%' %((offj*1.0 / total)*100)
+        print '男女比   : %d:%d' %(onj-female_num, female_num)
+        print '女生比例 : %.2f%%' %((female_num*1.0/onj)*100)
+    calculcate_padding_list(len_list, fun_list, queue_on_job + queue_off_job)
+    separation_print('成員', GRN)
+    format_print_queue(queue_on_job, len_list, fun_list, color_list, 3)
+    separation_print('畢業生', YEL)
+    format_print_queue(queue_off_job, len_list, fun_list, color_list, 3)
+
+
+def analyze_team(target, depth):
+    team_member_in = list()
+    team_member_out = list()
+    team_member_gender = list()
+    team_queue = list()
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    try:
+        xpath = "department_mapping/alias[simple_name='" + target.upper() + "']/full_name"
+        my_team_full = xml_root.find(xpath).text
+    except:
+        my_team_full = None
+
+    for xml_member in xml_employee:
+        my_division   = xml_member.find('department/division').text
+        my_team       = xml_member.find('department/team').text
+        for compare_item in department_spanning(my_division, my_team):
+            if ((target.upper() in compare_item) or
+                    (my_team_full != None and my_team == my_team_full)):
+                if xml_member.attrib['employed'] == '1':
+                    team_member_in.append(xml_member)
+                    if xml_member.find('gender').text == '0':
+                        team_member_gender.append(xml_member)
+                else:
+                    team_member_out.append(xml_member)
+                team_queue.append(format_team(xml_member)[0])
+                break
+
+    if len(Counter(team_queue)) == 1:
+        show_team_analysis(team_member_in, team_member_out, team_member_gender)
+    else:
+        if depth == 0:
+            return
+        for sub in Counter(team_queue):
+            analyze_team(sub, 0)
+            print ''
+
+            
+def anlysis_name_en(top):
+    name_queue = list()
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    for member in xml_employee:
+        if member.attrib['employed'] == '0':
+            continue
+        name_en = member.find('nameEn').text
+        last_name = name_en.split()[-1]
+        first_name = name_en.replace(last_name,'').strip()
+        name_queue.append(first_name)
+        #name_queue.append(last_name)
+
+    print 'most name in synology : ',color(RED,'Top: '+str(top))
+    mc = Counter(name_queue).most_common(top)
+
+    for idx,(name,num) in enumerate(mc):
+        print 'No.%2d %8s x %d' %(idx+1,name,num)
+
+def update_database():
+    rmp = '/tmp/snoopy'
+    rdb = '/tmp/snoopy/snoopy_2015.xml'
+
+    if not os.path.isdir(rmp):
+        cmd = "mkdir " + rmp
+        os.popen (cmd)
+
+    if not os.path.ismount(rmp):
+        os.popen ("mount.cifs //snoopy.synology.com/public/Hanen /tmp/snoopy/ -o user=syno -o password=""")
+
+    if os.path.exists(rdb):
+        print color(GRN, "updating.....")
+        cmd = "cp "+rdb+" "+local_database
+        os.popen(cmd)
+    else:
+        print color(RED, "update failed")
+
+    if os.path.ismount(rmp):
+        cmd = "umount " + rmp
+        os.popen (cmd)
+
+def auto_update():
+    global tree
+    date = ''
+    try:
+        tree = ET.parse(local_database)
+        xml_root = tree.getroot()
+        date = xml_root.attrib['date']
+    except:
+        pass
+    finally:
+        if date != get_today():
+            print color(GRN,'executing auto update')
+            update_database()
+
+def format_modify_type(info, padding = 0):
+    result =''
+    mtype = info.attrib['modify_type']
+    if 'team' in mtype:
+        result = 'team change'
+    elif 'title' in mtype:
+        result = 'title change'
+    else:
+        result = mtype
+    result = format_padding(result, padding - len(result))
+    return result, len(result)
+
+def format_modify_text(info):
+    def parse_team(department):
+        result = ""
+        department = department.split('-')
+        my_division = department[0]
+        my_team     = department[1]
+        if my_team != 'None':
+            try:
+                result = my_division + ' '+ department_dict[my_team]
+            except:
+                if my_team != 'None':
+                    result = my_division + '-' + my_team
+                else:
+                    result = my_division
+        else:
+            result = my_division
+        return result
+
+    o_buffer = ''
+    mtype = info.attrib['modify_type']
+    if 'team' in mtype:
+        team_list = info.text.split(',')
+        team_a = parse_team(team_list[0])
+        team_b = parse_team(team_list[1])
+        o_buffer = team_a + ' -> ' + team_b
+        o_buffer = color(GRN, o_buffer)
+    elif 'title' in mtype:
+        title_list = info.text.split(',')
+        old_title = color(RED, title_list[0])
+        new_title = color(GRN, title_list[1])
+        o_buffer = old_title + ' -> ' + new_title
+    return o_buffer
+
+
+
+def calculcate_modify_type_padding(info_list):
+    max_len = 0
+    for info in info_list:
+        if format_modify_type(info)[1] > max_len:
+            max_len = format_modify_type(info)[1]
+    return max_len
+
+def format_history_print(queue, len_list, fun_list, color_list):
+    def modify_type_color(string):
+        if 'change' in string:
+            string = color(YEL, string)
+        elif 'remove' in string:
+            string = color(RED, string)
+        else:
+            string = color(GRN, string)
+        return string
+
+    for item in queue:
+        info = item[0]
+        mbr  = item[1]
+        date = info.attrib['date']
+        mtype = format_modify_type(info, len_list[-1])[0]
+        mtype = modify_type_color(mtype)
+        print_str = date + ' ' + mtype
+        for idx,f in enumerate(fun_list):
+            tmp_str = f(mbr, len_list[idx])[0]
+            print_str += ' ' + color(color_list[idx], tmp_str)
+
+        if 'change' in mtype:
+            print_str += ' ' + format_modify_text(info)
+        print print_str.encode('utf8')
+
+def format_history_output_buf(queue):
+    def sort_key_date(tup):
+        info = tup[0]
+        date = info.attrib['date'].replace('-','')
+        return int(date)
+    def sort_key_mtype(tup):
+        info = tup[0]
+        return format_modify_type(info)
+
+    fun_list = [format_team, format_name_tw, format_name_en, format_account]
+    len_list = [0,0,0,0]
+    color_list = [CLR,GRN,CLR,CLR]
+    # sort #
+    queue[:] = sorted(queue,key=sort_key_date)
+    #queue[:] = sorted(queue,key=sort_key_mtype)
+
+    mbr_list = [m[1] for m in queue]
+    info_list = [m[0] for m in queue]
+
+    calculcate_padding_list(len_list, fun_list, mbr_list)
+    len_list += [calculcate_modify_type_padding(info_list)]
+    # date, type, team, nameTw, nameEn, account
+    format_history_print(queue, len_list, fun_list, color_list)
+
+def show_history_information(yyyymm):
+    if len(yyyymm) != 7:
+        print 'error: the format should be yyyy-mm. Example. 2015-02'
+        return
+    output_queue = list()
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    for member in xml_employee:
+        for info in member.findall('information/info_entry'):
+            info_date = info.attrib['date']
+            if yyyymm in info_date:
+                output_queue.append((info,member))
+    format_history_output_buf(output_queue)
+
+
+def format_print_staff_turnover(queue, io):
+    monthDict = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"May",
+            6:"Jun", 7:"Jul", 8:"Aug", 9:"Sep",  10:"Oct",  11:"Nov",  12:"Dec"}
+    #[['RD','RD','QC'][...]..]
+    dlist=['RD','QC','SUP','MIS','MK','OTHERS']
+    separation = format_padding('total', 8-len('total'))
+    for d in dlist:
+        separation += format_padding(d, 7-len(d))
+    if io == 'add':
+        print color(GRN,'(add)   ')+separation
+    else:
+        print color(RED,'(leave) ')+separation
+
+    for i,q in enumerate(queue):
+        qlen = str(len(q))
+        o_buffer = format_padding(qlen, 7-len(qlen))
+        o_buffer = color(YEL, o_buffer)
+        for d in dlist:
+            value = Counter(q).get(d)
+            #nString = '0' if value == None else str(value)
+            if value == None or value == 0:
+                nString = ' 0'
+            elif io == 'del':
+                nString = '-'+str(value)
+            elif io == 'add':
+                nString = '+'+str(value)
+            pString = format_padding(nString, 7-len(nString))
+            if nString != ' 0' and io == 'add':
+                o_buffer += color(GRN, pString)
+            elif nString != ' 0' and io == 'del':
+                o_buffer += color(RED, pString)
+            else:
+                o_buffer += color(GRY, pString)
+        print format_padding(monthDict[i+1], 5),o_buffer
+    print ''
+
+def analyze_staff_turnover(query_year):
+    def mbr_division_type(member):
+        division = member.find('department/division').text
+        if 'SD' in division:
+            return 'RD'
+        check_list = ['QC','MK','Sup','MIS']
+        for c in check_list:
+            if c in division:
+                return c.upper()
+        return 'OTHERS'
+ 
+    month_add = [[],[],[],[],[],[],[],[],[],[],[],[]]
+    month_del = [[],[],[],[],[],[],[],[],[],[],[],[]]
+    xml_root = tree.getroot()
+    xml_employee = xml_root.find('employee')
+    for member in xml_employee:
+        for info in member.findall('information/info_entry'):
+            date = info.attrib['date'].split('-')
+            if date[0] != query_year:
+                continue
+            mtype = info.attrib['modify_type']
+            idx = (int(date[1])%12)
+            if mtype == 'add' or mtype == 'return':
+                month_add[idx].append(mbr_division_type(member))
+                #format_history_output_buf([(info,member)])
+            elif mtype == 'remove':
+                month_del[idx].append(mbr_division_type(member))
+                #format_history_output_buf([(info,member)])
+
+    temp = month_add[0]
+    month_add = month_add[1:] + [temp]
+    temp = month_del[0]
+    month_del = month_del[1:] + [temp]
+    format_print_staff_turnover(month_add, 'add')
+    format_print_staff_turnover(month_del, 'del')
+
+def query_alias(req):
+    output_queue = list()
+    xml_root = tree.getroot()
+    xml_mail_alias = xml_root.find('mail_alias')
+    for alias in xml_mail_alias:
+        if req in alias.attrib['name']:
+            output_queue.append(alias)
+
+    if len(output_queue) == 0:
+        return
+
+    if len(output_queue) > 1:
+        for idx, alias in enumerate(output_queue):
+            print color(WHT, str(idx)), alias.attrib['name']+'@synology.com'
+
+        idx = raw_input('Please select specific alias : ')
+        show_alias = output_queue[int(idx)]
+    elif len(output_queue) == 1:
+        show_alias = output_queue[0]
+
+    print show_alias.text
+
+def help_format(description, example):
+    return description + '\n' + color(GRY, 'Example. '+example)
+
+def help_description():
+    # FIXME: bad performance
+    database_timestamps = 'no database'
+    try:
+        tree = ET.parse(local_database)
+        xml_root = tree.getroot()
+        database_timestamps = xml_root.attrib['date']
+    except:
+        pass
+    print 'query extension list, snoopy version 2015'
+    if database_timestamps == get_today():
+        print database_timestamps,color(GRN, 'up-to-date')
+    else:
+        print database_timestamps,color(RED, 'out of date')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='query extension list, snoopy version 2015', formatter_class=RawTextHelpFormatter)
+    parser.add_argument('pattern', nargs='*',
+            help='query the information from ext list')
+    parser.add_argument('-v','--verbose', action='store_true', 
+            help=help_format('query all infomation. including member has left','tel --verbose ANT'))
+    parser.add_argument('-a','--alias', action='store_true', 
+            help=help_format('query mail alias','tel -a rma'))
+    parser.add_argument('-f','--finger', action='store_true',
+            help=help_format('query detail member information','tel --finger tinalin'))
+    parser.add_argument('-l','--location', action='store_true',
+            help='query location information')
+    parser.add_argument('-t','--team', action='store_true',
+            help=help_format('query team information', 'tel --team cpt'))
+    parser.add_argument('-u','--update', action='store_true',
+            help='Update ext list before query info.')
+    parser.add_argument('-n','--name', action='store_true',
+            help='analyze Engish name')
+    parser.add_argument('-r', action='store_true', 
+            help=help_format('history record, default: this month','tel -r [2015-06]'))
+    parser.add_argument('-o','--turnover', action='store_true', 
+            help=help_format('show proportion of new/remove member by month','tel -o 2015'))
+    args = parser.parse_args()
+
+    auto_update()
+    if args.update == True:
+        update_database()
+        return
+
+    load_xml_tree()
+    load_team_mapping()
+    load_title_mapping()
+  
+    if len(args.pattern) == 0:
+        if args.location == True:
+            show_location_analysis()
+        elif args.r == True:
+            show_history_information(get_today()[0:7])
+        elif args.name == True:
+            anlysis_name_en(10)
+        else:
+            parser.print_help()
+    elif args.turnover == True:
+        analyze_staff_turnover(args.pattern[0])
+    elif args.finger == True:
+        finger_print(args.pattern[0])
+    elif args.team == True:
+        analyze_team(args.pattern[0], 1)
+    elif args.alias == True:
+        query_alias(args.pattern[0])
+    elif args.r == True:
+        show_history_information(args.pattern[0])
+    elif args.name == True:
+        anlysis_name_en(int(args.pattern[0]))
+    else:
+        query_ext_info(args.pattern[0].decode('utf8'), args.verbose)
+        flush_output_queue()
+
+if __name__ == "__main__":
+    main()

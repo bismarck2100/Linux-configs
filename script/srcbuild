@@ -1,0 +1,25 @@
+#!/bin/bash
+# @author: bismarckh
+
+function DoBuildSourceCode()
+{
+	local Project=$1
+	local Prefix="/source"
+	local DST_DIR=$Prefix"/"$1
+
+	cd $DST_DIR
+
+	printf "==============================\n"
+	printf "Do build src code: [%s]\n" $1
+
+	make -s -j8
+
+	cd - > /dev/null
+
+	printf "\n\n"
+}
+
+DoBuildSourceCode "libssmodule"
+DoBuildSourceCode "live555-20141020"
+DoBuildSourceCode "SurvDevicePack"
+DoBuildSourceCode "Surveillance"
